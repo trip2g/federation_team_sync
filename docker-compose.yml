@@ -1,0 +1,78 @@
+x-trip2g: &trip2g
+  image: ghcr.io/trip2g/trip2g:0.11.1
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8090/healthz"]
+    interval: 2s
+    retries: 30
+
+x-env: &env
+  LISTEN_ADDR: 0.0.0.0:8080
+  INTERNAL_LISTEN_ADDR: :8090
+  DB_FILE: /data/trip2g.sqlite3
+  GIT_API_REPO_PATH: /data/git
+  STORAGE_BACKEND: local
+  STORAGE_LOCAL_DIR: /data/storage
+  USER_TOKEN_INSECURE: "true"
+  MCP_FEDERATION_ALLOW_PRIVATE: "true"
+  JWT_SECRET: local-example-only-not-a-secret
+  DATA_ENCRYPTION_KEY: local-example-only-0000000000000
+  OWNER_EMAIL: owner@example.com
+
+x-script: &script
+  image: python:3.12-alpine
+  working_dir: /example
+  volumes: [./:/example:ro]
+  environment:
+    PYTHONDONTWRITEBYTECODE: "1"
+    MANAGER_URL: http://manager:8080
+    MANAGER_TOKEN: ${MANAGER_TOKEN}
+    MASHA_TOKEN: ${MASHA_TOKEN}
+    PETYA_TOKEN: ${PETYA_TOKEN}
+
+services:
+  manager:
+    <<: *trip2g
+    ports: ["8081:8080"]
+    volumes: [manager:/data]
+    environment:
+      <<: *env
+      PUBLIC_URL: http://localhost:8081
+      OWNER_PERSONAL_TOKEN_VALUE: ${MANAGER_TOKEN}
+
+  masha:
+    <<: *trip2g
+    ports: ["8082:8080"]
+    volumes: [masha:/data]
+    environment:
+      <<: *env
+      PUBLIC_URL: http://localhost:8082
+      OWNER_PERSONAL_TOKEN_VALUE: ${MASHA_TOKEN}
+
+  petya:
+    <<: *trip2g
+    ports: ["8083:8080"]
+    volumes: [petya:/data]
+    environment:
+      <<: *env
+      PUBLIC_URL: http://localhost:8083
+      OWNER_PERSONAL_TOKEN_VALUE: ${PETYA_TOKEN}
+
+  setup:
+    <<: *script
+    command: ["python", "setup.py"]
+    restart: "no"
+    depends_on:
+      manager: { condition: service_healthy }
+      masha: { condition: service_healthy }
+      petya: { condition: service_healthy }
+
+  sync:
+    <<: *script
+    command: ["python", "sync.py"]
+    profiles: [manual]
+
+volumes:
+  manager:
+  masha:
+  petya:

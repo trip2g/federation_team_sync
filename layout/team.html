@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ note.Title() }}</title>
+  <style>
+    body { margin: 0; background: #fff; }
+    .t { max-width: 1200px; margin: 0 auto; padding: 16px; font: 15px/1.45 system-ui, sans-serif; color: #1f2933; }
+    .t h1 { font-size: 28px; margin: 8px 0 4px; }
+    .t h2 { font-size: 18px; margin: 20px 0 8px; }
+    .t-sub { color: #7b8794; font-size: 13px; margin: 0 0 16px; }
+    .t-ask { background: #fff4e5; border-left: 4px solid #f59f00; border-radius: 6px; padding: 8px 12px; margin: 6px 0; }
+    .t-ask ul { margin: 0; padding-left: 18px; }
+    .t-none { color: #7b8794; }
+    .t-wrap { overflow-x: auto; }
+    .t table { border-collapse: separate; border-spacing: 4px; width: 100%; }
+    .t th { font-weight: 600; font-size: 14px; color: #52606d; text-align: left; padding: 4px 6px; white-space: nowrap; }
+    .t th.t-today { color: #1971c2; }
+    .t td { vertical-align: top; background: #f8f9fa; border-radius: 10px; padding: 12px 14px; width: 30%; font-size: 14px; }
+    .t td.t-name { background: none; font-weight: 600; font-size: 16px; width: 10%; }
+    .t td.t-empty { color: #9aa5b1; text-align: center; vertical-align: middle; }
+    .t td.t-done { background: #ebfbee; }
+    .t td.t-help { background: #fff4e5; box-shadow: inset 0 0 0 2px #f59f00; }
+    .t-k { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #7b8794; margin-top: 4px; }
+    .t td ul { margin: 2px 0 0; padding-left: 16px; }
+    .t td p { margin: 2px 0; }
+  </style>
+</head>
+<body>
+  {{ dates := note.M().GetStrings("dates") }}
+  {{ people := note.M().GetStrings("people") }}
+  <main class="t">
+    <h1>{{ note.Title() }}</h1>
+    <p class="t-sub">Сотрудников: {{ len(people) }}. Копии статусов дня лежат в team/ и обновляются копировщиком.</p>
+
+    <h2>Сегодня просят помощи</h2>
+    {{ asked := 0 }}
+    {{ if len(dates) > 0 }}
+      {{ range i, alias := people }}
+        {{ if today := nvs.ByPath("team/" + alias + "/" + dates[0] + ".md"); today }}
+          {{ if today.M().GetBool("help", false) }}
+            {{ if ask := today.PartialRenderer().Section("Нужна помощь"); ask }}
+              {{ asked = asked + 1 }}
+              <div class="t-ask"><b>{{ today.M().GetString("person", alias) }}</b>{{ ask.ContentHTML }}</div>
+            {{ end }}
+          {{ end }}
+        {{ end }}
+      {{ end }}
+    {{ end }}
+    {{ if asked == 0 }}<p class="t-none">Никто.</p>{{ end }}
+
+    <h2>По дням</h2>
+    <div class="t-wrap"><table>
+      <tr>
+        <th></th>
+        {{ range j, day := dates }}
+          {{ if j == 0 }}<th class="t-today">сегодня, {{ day[8:10] }}.{{ day[5:7] }}</th>{{ else }}<th>{{ day[8:10] }}.{{ day[5:7] }}</th>{{ end }}
+        {{ end }}
+      </tr>
+      {{ range i, alias := people }}
+      <tr>
+        {{ name := alias }}
+        {{ if latest := nvs.ByGlob("team/" + alias + "/*.md").SortByMeta("date").Desc().First(); latest }}
+          {{ name = latest.M().GetString("person", alias) }}
+        {{ end }}
+        <td class="t-name">{{ name }}</td>
+        {{ range j, day := dates }}
+          {{ if cell := nvs.ByPath("team/" + alias + "/" + day + ".md"); cell }}
+            {{ parts := cell.PartialRenderer() }}
+            {{ help := cell.M().GetBool("help", false) }}
+            <td class="{{ help ? "t-help" : "t-done" }}">
+              {{ if plan := parts.Section("План"); plan }}<div class="t-k">план</div>{{ plan.ContentHTML }}{{ end }}
+              {{ if result := parts.Section("Итог"); result }}<div class="t-k">итог</div>{{ result.ContentHTML }}{{ end }}
+              {{ if help }}{{ if ask := parts.Section("Нужна помощь"); ask }}<div class="t-k">нужна помощь</div>{{ ask.ContentHTML }}{{ end }}{{ end }}
+            </td>
+          {{ else }}
+            <td class="t-empty">нет статуса</td>
+          {{ end }}
+        {{ end }}
+      </tr>
+      {{ end }}
+    </table></div>
+  </main>
+</body>
+</html>
